@@ -379,6 +379,8 @@ const state = {
   calendarCursor: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedDate: null,
   lastFocusedElement: null,
+  reportReturnFocus: null,
+  activeOrderId: null,
   orders: []
 };
 
@@ -681,6 +683,24 @@ async function fulfillOrder(orderId) {
   if (error) throw error;
 }
 
+async function handleFulfillment(button) {
+  if (!button || button.disabled) return;
+  const orderId = button.dataset.orderId;
+  button.disabled = true;
+  button.textContent = "Updating…";
+
+  try {
+    await fulfillOrder(orderId);
+    await renderAdmin();
+    if (state.activeOrderId === orderId) renderOrderReport(orderId);
+  } catch (error) {
+    console.error("Unable to fulfill order", error);
+    button.disabled = false;
+    button.textContent = "Try again";
+    document.querySelector("#orders-filter").textContent = "The order could not be updated. Please try again.";
+  }
+}
+
 function configureAdminPortal() {
   const portal = document.querySelector("#admin-portal");
   const loginForm = document.querySelector("#admin-login-form");
@@ -749,24 +769,32 @@ function configureAdminPortal() {
   });
 
   document.querySelector("#orders-list").addEventListener("click", async (event) => {
-    const button = event.target.closest(".fulfill-button");
-    if (!button || button.disabled) return;
-    button.disabled = true;
-    button.textContent = "Updating…";
-
-    try {
-      await fulfillOrder(button.dataset.orderId);
-      await renderAdmin();
-    } catch (error) {
-      console.error("Unable to fulfill order", error);
-      button.disabled = false;
-      button.textContent = "Try again";
-      document.querySelector("#orders-filter").textContent = "The order could not be updated. Please try again.";
+    const detailButton = event.target.closest(".order-detail-button");
+    if (detailButton) {
+      openOrderReport(detailButton.dataset.orderId, detailButton);
+      return;
     }
+
+    await handleFulfillment(event.target.closest(".fulfill-button"));
+  });
+
+  document.querySelector("#order-report-back").addEventListener("click", closeOrderReport);
+  document.querySelector("#order-report-print").addEventListener("click", () => {
+    document.body.classList.add("printing-order-report");
+    window.print();
+  });
+  window.addEventListener("afterprint", () => document.body.classList.remove("printing-order-report"));
+  document.querySelector("#order-report-fulfill").addEventListener("click", async (event) => {
+    await handleFulfillment(event.currentTarget);
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !portal.hidden) closeAdmin();
+    if (event.key !== "Escape" || portal.hidden) return;
+    if (!document.querySelector("#order-report").hidden) {
+      closeOrderReport();
+      return;
+    }
+    closeAdmin();
   });
 }
 
@@ -791,11 +819,13 @@ async function openAdmin() {
 }
 
 function closeAdmin() {
+  closeOrderReport(false);
   document.querySelector("#admin-portal").hidden = true;
   state.lastFocusedElement?.focus();
 }
 
 function showLogin() {
+  closeOrderReport(false);
   document.querySelector("#admin-login").hidden = false;
   document.querySelector("#admin-dashboard").hidden = true;
   requestAnimationFrame(() => document.querySelector("#admin-email").focus());
@@ -935,15 +965,120 @@ function createOrderCard(order) {
     details.append(detail);
   });
 
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "fulfill-button";
-  button.dataset.orderId = order.id;
-  button.disabled = fulfilled;
-  button.textContent = fulfilled ? "✓ Order fulfilled" : "Mark as fulfilled";
+  const actions = document.createElement("div");
+  actions.className = "order-card-actions";
 
-  card.append(header, details, button);
+  const detailButton = document.createElement("button");
+  detailButton.type = "button";
+  detailButton.className = "order-detail-button";
+  detailButton.dataset.orderId = order.id;
+  detailButton.textContent = "Order details";
+
+  const fulfillButton = document.createElement("button");
+  fulfillButton.type = "button";
+  fulfillButton.className = "fulfill-button";
+  fulfillButton.dataset.orderId = order.id;
+  fulfillButton.disabled = fulfilled;
+  fulfillButton.textContent = fulfilled ? "✓ Order fulfilled" : "Mark as fulfilled";
+
+  actions.append(detailButton, fulfillButton);
+  card.append(header, details, actions);
   return card;
+}
+
+function reportDate(isoDate) {
+  if (!isoDate) return "Not yet fulfilled";
+  return new Date(isoDate).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function renderOrderReport(orderId) {
+  const order = state.orders.find((item) => item.id === orderId);
+  if (!order) {
+    closeOrderReport(false);
+    return;
+  }
+
+  const fulfilled = order.status === "fulfilled";
+  const seedCount = order.seedCount || Math.max(1, Number(order.amount) / 7);
+  const statusLabel = fulfilled ? "Fulfilled" : "Pending";
+  const fulfillmentCopy = fulfilled
+    ? "This personalized writing order has been marked as fulfilled."
+    : "This personalized writing order is awaiting fulfillment.";
+  const content = document.querySelector("#order-report-content");
+  content.innerHTML = `
+    <header class="report-header">
+      <a class="report-brand" href="index.html" aria-label="Seed Garden Writings home">
+        <span class="report-brand-mark" aria-hidden="true">🌱</span>
+        <span><strong>Seed Garden Writings</strong><small>Personalized writings</small></span>
+      </a>
+      <div class="report-heading"><span>Custom Digital Order</span><h2 id="order-report-title">ORDER REPORT</h2></div>
+    </header>
+    <section class="report-hero">
+      <div><span class="report-eyebrow">Order confirmation</span><h3>Your Writing Order</h3><p>A clear record of the personalized writing request and its fulfillment.</p></div>
+      <span class="report-status${fulfilled ? " fulfilled" : ""}">${statusLabel}</span>
+    </section>
+    <section class="report-section">
+      <h4>Order summary</h4>
+      <div class="report-card report-summary">
+        <div><small>Order date</small><span>${escapeHtml(reportDate(order.createdAt))}</span></div>
+        <div><small>Order ID</small><strong>${escapeHtml(order.id)}</strong></div>
+        <div><small>Amount</small><strong>$${escapeHtml(order.amount)} USD</strong></div>
+        <div><small>Status</small><span class="report-status${fulfilled ? " fulfilled" : ""}">${statusLabel}</span></div>
+      </div>
+    </section>
+    <section class="report-section">
+      <h4>Customer</h4>
+      <div class="report-card report-columns">
+        <div><small>Name</small><strong>${escapeHtml(order.name)}</strong></div>
+        <div><small>Email</small><span>${escapeHtml(order.email)}</span></div>
+      </div>
+    </section>
+    <section class="report-section">
+      <h4>Ordered writing</h4>
+      <div class="report-card report-writing">
+        <div><small>Story type</small><strong>${escapeHtml(order.storyType)}</strong></div>
+        <div><small>Pages</small><span>${escapeHtml(order.pageLength)}</span></div>
+        <div><small>Seeds</small><span>${escapeHtml(seedCount)} seed${seedCount === 1 ? "" : "s"}</span></div>
+      </div>
+    </section>
+    <section class="report-section">
+      <h4>Personalized writing request</h4>
+      <blockquote class="report-card report-request">${escapeHtml(order.request)}</blockquote>
+    </section>
+    <section class="report-section">
+      <h4>Fulfillment</h4>
+      <div class="report-card report-fulfillment">
+        <div><small>Fulfillment status</small><strong>${statusLabel}</strong><p>${fulfillmentCopy}</p></div>
+        <div><small>Fulfilled on</small><strong>${escapeHtml(reportDate(order.fulfilledAt))}</strong></div>
+      </div>
+    </section>
+    <footer class="report-footer"><span>© ${new Date().getFullYear()} Seed Garden Writings</span><span>Custom Order Record</span><span>Stories · Faith · Inspiration</span></footer>
+  `;
+
+  const fulfillButton = document.querySelector("#order-report-fulfill");
+  fulfillButton.dataset.orderId = order.id;
+  fulfillButton.disabled = fulfilled;
+  fulfillButton.textContent = fulfilled ? "✓ Order fulfilled" : "Mark as fulfilled";
+}
+
+function openOrderReport(orderId, trigger) {
+  state.activeOrderId = orderId;
+  state.reportReturnFocus = trigger || document.activeElement;
+  renderOrderReport(orderId);
+  const report = document.querySelector("#order-report");
+  report.hidden = false;
+  report.scrollTop = 0;
+  document.querySelector("#order-report-back").focus();
+}
+
+function closeOrderReport(restoreFocus = true) {
+  const report = document.querySelector("#order-report");
+  if (!report || report.hidden) return;
+  report.hidden = true;
+  document.body.classList.remove("printing-order-report");
+  state.activeOrderId = null;
+  if (restoreFocus) state.reportReturnFocus?.focus();
+  state.reportReturnFocus = null;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
