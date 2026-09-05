@@ -246,7 +246,11 @@ const REVIEW_OPENINGS = [
   "The writing gave shape to something I had struggled to express for a long time.",
   "It arrived with exactly the reflective tone I requested and felt beautifully balanced.",
   "The story was clear, moving, and full of small touches that made it unmistakably ours.",
-  "I appreciated how respectfully the writer handled every name, memory, and emotion."
+  "I appreciated how respectfully the writer handled every name, memory, and emotion.",
+  "The final story held onto the heart of my request while adding details I had not considered.",
+  "From the opening line onward, the writing felt attentive, warm, and thoughtfully composed.",
+  "What began as a few notes became a complete piece with a strong sense of place and feeling.",
+  "The language was simple in the best way, allowing the important moments to stand out clearly."
 ];
 
 const REVIEW_ENDINGS = [
@@ -261,7 +265,8 @@ const REVIEW_ENDINGS = [
   "It felt like a small keepsake made with patience rather than a rushed order.",
   "The piece brought both tears and smiles, which was exactly what I had hoped for.",
   "I would happily request another story for a future family occasion.",
-  "The result felt intimate, polished, and easy to share with the people I love."
+  "The result felt intimate, polished, and easy to share with the people I love.",
+  "It has become a meaningful reminder of why that moment mattered so much to us."
 ];
 
 const REVIEW_TYPES = [
@@ -291,23 +296,76 @@ function reviewerName(index, firstNames, lastNames) {
   return `${firstNames[nameIndex]} ${lastNames[lastNameIndex]}`;
 }
 
-const REVIEWS = Array.from({ length: 123 }, (_, index) => {
+function reviewText(index) {
+  const opening = REVIEW_OPENINGS[index % REVIEW_OPENINGS.length];
+  const ending = REVIEW_ENDINGS[Math.floor(index / REVIEW_OPENINGS.length)];
+  return `${opening} ${ending}`;
+}
+
+const WESTERN_REVIEWS = Array.from({ length: 123 }, (_, index) => {
   const british = index % 2 === 0;
   const regionalIndex = Math.floor(index / 2);
   const name = british
     ? reviewerName(regionalIndex, BRITISH_FIRST_NAMES, BRITISH_LAST_NAMES)
     : reviewerName(regionalIndex, AMERICAN_FIRST_NAMES, AMERICAN_LAST_NAMES);
-  const opening = REVIEW_OPENINGS[index % REVIEW_OPENINGS.length];
-  const ending = REVIEW_ENDINGS[Math.floor(index / REVIEW_OPENINGS.length)];
 
   return {
     name,
     country: british ? "United Kingdom" : "United States",
     type: REVIEW_TYPES[index % REVIEW_TYPES.length],
     rating: REVIEW_RATINGS[(index * 37) % REVIEW_RATINGS.length],
-    text: `${opening} ${ending}`
+    text: reviewText(index)
   };
 });
+
+const CHINESE_REVIEWER_NAMES = [
+  "Wei Chen", "Li Wang", "Mei Zhang", "Jun Liu", "Xinyi Yang", "Hao Huang", "Yuchen Zhao",
+  "Lin Wu", "Ming Zhou", "Jia Xu", "Rui Sun", "Fang Ma", "Qiang Zhu", "Yue Hu",
+  "Zihan Guo", "An He", "Tao Gao", "Jing Lin", "Bo Luo", "Lili Zheng", "Kai Liang"
+];
+
+const JAPANESE_REVIEWER_NAMES = [
+  "Haruto Sato", "Yui Suzuki", "Ren Takahashi", "Aoi Tanaka", "Sota Watanabe", "Hana Ito",
+  "Kaito Yamamoto", "Mei Nakamura", "Yuto Kobayashi", "Rin Kato", "Daiki Yoshida", "Sakura Yamada",
+  "Takumi Sasaki", "Hina Yamaguchi", "Riku Matsumoto", "Akari Inoue", "Shota Kimura", "Nanami Hayashi",
+  "Kenta Shimizu", "Mio Yamazaki", "Ryota Mori", "Ayaka Abe", "Kazuki Ikeda", "Nao Hashimoto",
+  "Kota Ishikawa", "Emi Nakajima", "Tsubasa Maeda", "Rina Fujita", "Hayato Ogawa", "Misaki Goto",
+  "Sho Okada", "Kaori Hasegawa", "Naoki Murakami", "Yuna Kondo", "Kenji Ishii", "Chihiro Saito",
+  "Masato Sakamoto", "Riko Endo", "Hiroki Aoki", "Nozomi Fujii", "Yuki Nishimura"
+];
+
+const EAST_ASIAN_REVIEW_RATINGS = [
+  ...Array(1).fill(3.8),
+  ...Array(1).fill(3.9),
+  ...Array(1).fill(4.0),
+  ...Array(1).fill(4.1),
+  ...Array(2).fill(4.2),
+  ...Array(2).fill(4.3),
+  ...Array(3).fill(4.4),
+  ...Array(4).fill(4.5),
+  ...Array(5).fill(4.6),
+  ...Array(7).fill(4.7),
+  ...Array(9).fill(4.8),
+  ...Array(12).fill(4.9),
+  ...Array(14).fill(5.0)
+];
+
+const EAST_ASIAN_REVIEWER_NAMES = [
+  ...CHINESE_REVIEWER_NAMES.map((name) => ({ name, country: "China" })),
+  ...JAPANESE_REVIEWER_NAMES.map((name) => ({ name, country: "Japan" }))
+];
+
+const EAST_ASIAN_REVIEWS = EAST_ASIAN_REVIEWER_NAMES.map((reviewer, index) => {
+  const globalIndex = WESTERN_REVIEWS.length + index;
+  return {
+    ...reviewer,
+    type: REVIEW_TYPES[globalIndex % REVIEW_TYPES.length],
+    rating: EAST_ASIAN_REVIEW_RATINGS[(index * 17) % EAST_ASIAN_REVIEW_RATINGS.length],
+    text: reviewText(globalIndex)
+  };
+});
+
+const REVIEWS = [...WESTERN_REVIEWS, ...EAST_ASIAN_REVIEWS];
 
 const ADMIN_EMAIL = "jaymrin01@gmail.com";
 const supabaseConfig = window.SEED_GARDEN_SUPABASE;
@@ -340,6 +398,7 @@ function renderReviews() {
   const summary = document.querySelector(".rating-summary");
 
   document.querySelector("#review-average").textContent = average;
+  document.querySelector("#review-count").textContent = `Based on ${REVIEWS.length} unique reader reviews`;
   summary.setAttribute("aria-label", `Average rating ${average} out of 5`);
   list.innerHTML = REVIEWS.map((review, index) => {
     const initials = review.name.split(" ").map((part) => part[0]).join("");

@@ -2,7 +2,7 @@
 
 A fixed-screen three-column writing website. Each column scrolls independently while the page stays fitted to the viewport:
 
-- Left: 123 unique British and American customer reviews with a 4.78 overall rating
+- Left: 185 unique British, American, Chinese, and Japanese customer reviews with a dynamically calculated overall rating
 - Middle: 21 interactive flip books across Stories, Writings & Documentaries, and Faith-Based Stories
 - Right: story type, page length, customer details, request, amount, and checkout
 - Admin: calendar-based local order dashboard with fulfillment controls
