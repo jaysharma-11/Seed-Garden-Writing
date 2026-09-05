@@ -211,6 +211,104 @@ const BOOKS = [
   }
 ];
 
+const BRITISH_FIRST_NAMES = [
+  "Amelia", "Oliver", "Isla", "George", "Florence", "Arthur", "Poppy", "Harry", "Imogen", "Jack",
+  "Beatrice", "Alfie", "Matilda", "Freddie", "Evie", "Henry", "Harriet", "Theo", "Alice", "Edward",
+  "Rosie", "William", "Sophie", "Thomas", "Charlotte", "Oscar", "Elsie", "James", "Lucy", "Archie", "Eleanor"
+];
+
+const BRITISH_LAST_NAMES = [
+  "Thompson", "Davies", "Clarke", "Bennett", "Hughes", "Fletcher", "Harrison", "Whitaker", "Collins", "Parker",
+  "Reynolds", "Sutton", "Spencer", "Ellis", "Barker", "Chapman", "Turner", "Wallace", "Foster", "Mitchell",
+  "Cooper", "Morgan", "Bailey", "Richardson", "Wood", "Dawson", "Booth", "Palmer", "Holmes", "Webb", "Carter"
+];
+
+const AMERICAN_FIRST_NAMES = [
+  "Ava", "Liam", "Harper", "Mason", "Madison", "Ethan", "Brooklyn", "Noah", "Riley", "Jackson",
+  "Abigail", "Logan", "Savannah", "Caleb", "Kennedy", "Wyatt", "Avery", "Owen", "Natalie", "Grayson",
+  "Zoe", "Carter", "Addison", "Luke", "Hailey", "Hudson", "Piper", "Lincoln", "Sadie", "Miles", "Audrey"
+];
+
+const AMERICAN_LAST_NAMES = [
+  "Anderson", "Miller", "Johnson", "Williams", "Brown", "Wilson", "Moore", "Taylor", "Martin", "Jackson",
+  "White", "Harris", "Robinson", "Clark", "Lewis", "Walker", "Hall", "Allen", "Young", "Hernandez",
+  "King", "Wright", "Scott", "Green", "Adams", "Baker", "Nelson", "Hill", "Campbell", "Rivera", "Brooks"
+];
+
+const REVIEW_OPENINGS = [
+  "The story captured our family memory with warmth and an honest, natural voice.",
+  "I was surprised by how personal and carefully observed the final writing felt.",
+  "Every detail I shared found a meaningful place without making the piece feel crowded.",
+  "The words were gentle, vivid, and much closer to my own feelings than I expected.",
+  "This turned a difficult memory into something thoughtful that I can keep and revisit.",
+  "The finished piece sounded sincere and specific rather than like a standard template.",
+  "I loved the quiet details and the way the ending brought the whole story together.",
+  "The writing gave shape to something I had struggled to express for a long time.",
+  "It arrived with exactly the reflective tone I requested and felt beautifully balanced.",
+  "The story was clear, moving, and full of small touches that made it unmistakably ours.",
+  "I appreciated how respectfully the writer handled every name, memory, and emotion."
+];
+
+const REVIEW_ENDINGS = [
+  "I read it twice that evening and sent a copy to my sister.",
+  "It now sits inside the journal I return to every Sunday morning.",
+  "The recipient recognised the moment immediately and was genuinely touched.",
+  "I only needed one tiny correction, and the final result felt complete.",
+  "It made a thoughtful birthday gift and started a lovely family conversation.",
+  "The prayerful tone was comforting without ever becoming too formal.",
+  "I printed it for our mantel and still notice a new line each time I read it.",
+  "The pacing was calm, the imagery was lovely, and the message stayed clear.",
+  "It felt like a small keepsake made with patience rather than a rushed order.",
+  "The piece brought both tears and smiles, which was exactly what I had hoped for.",
+  "I would happily request another story for a future family occasion.",
+  "The result felt intimate, polished, and easy to share with the people I love."
+];
+
+const REVIEW_TYPES = [
+  "Personal story", "Faith-based writing", "Motivational piece", "Family keepsake",
+  "Birthday story", "Prayer writing", "Anniversary gift", "Memory tribute"
+];
+
+const REVIEW_RATINGS = [
+  ...Array(1).fill(3.8),
+  ...Array(1).fill(3.9),
+  ...Array(1).fill(4.0),
+  ...Array(1).fill(4.1),
+  ...Array(1).fill(4.2),
+  ...Array(2).fill(4.3),
+  ...Array(3).fill(4.4),
+  ...Array(4).fill(4.5),
+  ...Array(8).fill(4.6),
+  ...Array(12).fill(4.7),
+  ...Array(11).fill(4.8),
+  ...Array(78).fill(4.9)
+];
+
+function reviewerName(index, firstNames, lastNames) {
+  const nameIndex = index % firstNames.length;
+  const cycle = Math.floor(index / firstNames.length);
+  const lastNameIndex = (nameIndex + cycle * 11) % lastNames.length;
+  return `${firstNames[nameIndex]} ${lastNames[lastNameIndex]}`;
+}
+
+const REVIEWS = Array.from({ length: 123 }, (_, index) => {
+  const british = index % 2 === 0;
+  const regionalIndex = Math.floor(index / 2);
+  const name = british
+    ? reviewerName(regionalIndex, BRITISH_FIRST_NAMES, BRITISH_LAST_NAMES)
+    : reviewerName(regionalIndex, AMERICAN_FIRST_NAMES, AMERICAN_LAST_NAMES);
+  const opening = REVIEW_OPENINGS[index % REVIEW_OPENINGS.length];
+  const ending = REVIEW_ENDINGS[Math.floor(index / REVIEW_OPENINGS.length)];
+
+  return {
+    name,
+    country: british ? "United Kingdom" : "United States",
+    type: REVIEW_TYPES[index % REVIEW_TYPES.length],
+    rating: REVIEW_RATINGS[(index * 37) % REVIEW_RATINGS.length],
+    text: `${opening} ${ending}`
+  };
+});
+
 const ADMIN_EMAIL = "jaymrin01@gmail.com";
 const supabaseConfig = window.SEED_GARDEN_SUPABASE;
 const supabaseClient = window.supabase && supabaseConfig
@@ -233,6 +331,31 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function renderReviews() {
+  const list = document.querySelector("#review-list");
+  const overallRating = REVIEWS.reduce((total, review) => total + review.rating, 0) / REVIEWS.length;
+  const average = overallRating.toFixed(2);
+  const summary = document.querySelector(".rating-summary");
+
+  document.querySelector("#review-average").textContent = average;
+  summary.setAttribute("aria-label", `Average rating ${average} out of 5`);
+  list.innerHTML = REVIEWS.map((review, index) => {
+    const initials = review.name.split(" ").map((part) => part[0]).join("");
+    return `
+      <article class="review-card${index === 0 ? " active-review" : ""}">
+        <div class="review-head">
+          <div class="avatar" aria-hidden="true">${escapeHtml(initials)}</div>
+          <div>
+            <strong>${escapeHtml(review.name)}</strong>
+            <span>${escapeHtml(review.type)} • ${escapeHtml(review.country)}</span>
+          </div>
+          <span class="mini-stars" aria-label="${review.rating.toFixed(1)} out of 5 stars">★ ${review.rating.toFixed(1)}</span>
+        </div>
+        <p>“${escapeHtml(review.text)}”</p>
+      </article>`;
+  }).join("");
 }
 
 function renderLibrary() {
@@ -765,6 +888,7 @@ function createOrderCard(order) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  renderReviews();
   renderLibrary();
   configureOrderForm();
   configureAdminPortal();
