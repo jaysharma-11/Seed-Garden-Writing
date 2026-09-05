@@ -316,8 +316,6 @@ function configureOrderForm() {
   const form = document.querySelector("#payment-form");
   const customWrap = document.querySelector("#custom-pages-wrap");
   const customInput = document.querySelector("#custom-pages");
-  const payAmount = document.querySelector("#pay-amount");
-  const paySeeds = document.querySelector("#pay-seeds");
 
   document.querySelectorAll(".type-choice").forEach((button) => {
     button.addEventListener("click", () => setChoice(button, ".type-choice", "#story-type"));
@@ -338,8 +336,6 @@ function configureOrderForm() {
     button.addEventListener("click", () => {
       setChoice(button, ".amount-choice", "#amount");
       document.querySelector("#seed-count").value = button.dataset.seeds;
-      payAmount.textContent = button.dataset.value;
-      paySeeds.textContent = `${button.dataset.seeds} ${button.dataset.seeds === "1" ? "Seed" : "Seeds"}`;
     });
   });
 
@@ -434,8 +430,6 @@ function resetChoices() {
   setChoice(pages, ".page-choice", "#page-length");
   setChoice(amount, ".amount-choice", "#amount");
   document.querySelector("#seed-count").value = "2";
-  document.querySelector("#pay-amount").textContent = "14";
-  document.querySelector("#pay-seeds").textContent = "2 Seeds";
   document.querySelector("#custom-pages-wrap").hidden = true;
   document.querySelector("#custom-pages").required = false;
 }
