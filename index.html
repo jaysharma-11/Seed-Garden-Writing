@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#e9e5df" />
   <meta name="description" content="Personalized stories, faith-based writings, and inspirational pieces crafted around your request." />
   <title>Seed Garden Writings — Personalized Writing</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,6 +26,12 @@
       </button>
     </header>
 
+    <nav class="mobile-section-nav" aria-label="Browse page sections">
+      <button class="mobile-section-button active" type="button" data-panel="reviews" aria-pressed="true">Reviews</button>
+      <button class="mobile-section-button" type="button" data-panel="writing" aria-pressed="false">Library</button>
+      <button class="mobile-section-button" type="button" data-panel="order" aria-pressed="false">Order</button>
+    </nav>
+
     <main class="workspace">
       <!-- LEFT: REVIEWS -->
       <section class="panel reviews-panel" id="reviews" aria-labelledby="reviews-title">
@@ -43,6 +50,7 @@
         </div>
 
         <div class="review-list" id="review-list"></div>
+        <button class="review-load-more" id="review-load-more" type="button" aria-controls="review-list">Show more reviews</button>
 
         <div class="review-footer">
           <span class="trust-dot"></span>

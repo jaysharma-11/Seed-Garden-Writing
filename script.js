@@ -381,6 +381,7 @@ const state = {
   lastFocusedElement: null,
   reportReturnFocus: null,
   activeOrderId: null,
+  reviewsShown: 12,
   orders: []
 };
 
@@ -402,7 +403,8 @@ function renderReviews() {
   document.querySelector("#review-average").textContent = average;
   document.querySelector("#review-count").textContent = `Based on ${REVIEWS.length} unique reader reviews`;
   summary.setAttribute("aria-label", `Average rating ${average} out of 5`);
-  list.innerHTML = REVIEWS.map((review, index) => {
+  const visibleReviews = REVIEWS.slice(0, state.reviewsShown);
+  list.innerHTML = visibleReviews.map((review, index) => {
     const initials = review.name.split(" ").map((part) => part[0]).join("");
     return `
       <article class="review-card${index === 0 ? " active-review" : ""}">
@@ -417,6 +419,53 @@ function renderReviews() {
         <p>“${escapeHtml(review.text)}”</p>
       </article>`;
   }).join("");
+
+  const loadMore = document.querySelector("#review-load-more");
+  const remaining = REVIEWS.length - visibleReviews.length;
+  loadMore.hidden = remaining <= 0;
+  loadMore.textContent = remaining > 0 ? `Show more reviews (${remaining} remaining)` : "All reviews shown";
+}
+
+function configureMobileNavigation() {
+  const workspace = document.querySelector(".workspace");
+  const buttons = [...document.querySelectorAll(".mobile-section-button")];
+  const panels = buttons.map((button) => document.querySelector(`#${button.dataset.panel}`));
+  let scrollFrame = null;
+
+  function setActivePanel(panelId) {
+    buttons.forEach((button) => {
+      const active = button.dataset.panel === panelId;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  }
+
+  function syncActivePanel() {
+    scrollFrame = null;
+    if (window.innerWidth > 900) return;
+    const workspaceCenter = workspace.getBoundingClientRect().left + (workspace.clientWidth / 2);
+    const closest = panels.reduce((best, panel) => {
+      const rect = panel.getBoundingClientRect();
+      const distance = Math.abs((rect.left + rect.width / 2) - workspaceCenter);
+      return !best || distance < best.distance ? { panel, distance } : best;
+    }, null);
+    if (closest) setActivePanel(closest.panel.id);
+  }
+
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = document.querySelector(`#${button.dataset.panel}`);
+      setActivePanel(panel.id);
+      workspace.scrollTo({ left: panel.offsetLeft - workspace.offsetLeft, behavior: "smooth" });
+      panel.focus({ preventScroll: true });
+    });
+  });
+
+  panels.forEach((panel) => panel.setAttribute("tabindex", "-1"));
+  workspace.addEventListener("scroll", () => {
+    if (!scrollFrame) scrollFrame = requestAnimationFrame(syncActivePanel);
+  }, { passive: true });
+  window.addEventListener("resize", syncActivePanel, { passive: true });
 }
 
 function renderLibrary() {
@@ -1083,7 +1132,12 @@ function closeOrderReport(restoreFocus = true) {
 
 document.addEventListener("DOMContentLoaded", () => {
   renderReviews();
+  document.querySelector("#review-load-more").addEventListener("click", () => {
+    state.reviewsShown = Math.min(state.reviewsShown + 12, REVIEWS.length);
+    renderReviews();
+  });
   renderLibrary();
+  configureMobileNavigation();
   configureOrderForm();
   configureAdminPortal();
   document.querySelector("#year").textContent = new Date().getFullYear();
