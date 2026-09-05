@@ -816,7 +816,7 @@ function localDateKey(isoDate) {
 async function renderAdmin() {
   if (document.querySelector("#admin-dashboard").hidden) return;
   const list = document.querySelector("#orders-list");
-  list.innerHTML = '<div class="empty-orders"><span aria-hidden="true">🌱</span><strong>Loading orders…</strong><p>Connecting to the Seed Garden backend.</p></div>';
+  list.innerHTML = '<div class="empty-orders"><span aria-hidden="true">🌱</span><strong>Loading orders…</strong><p>Connecting to the Seed Garden Writings backend.</p></div>';
 
   let orders;
   try {
