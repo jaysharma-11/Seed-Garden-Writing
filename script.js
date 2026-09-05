@@ -211,15 +211,19 @@ const BOOKS = [
   }
 ];
 
-const ORDER_STORAGE_KEY = "seedGardenOrders.v1";
-const ADMIN_SESSION_KEY = "seedGardenAdminAuthenticated";
 const ADMIN_EMAIL = "jaymrin01@gmail.com";
-const ADMIN_PASSWORD_HASH = "9f898bd7a40929e1c76ac50f9416e89f2d1bf4540eed179c51d226cea815e0fd";
+const supabaseConfig = window.SEED_GARDEN_SUPABASE;
+const supabaseClient = window.supabase && supabaseConfig
+  ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    })
+  : null;
 
 const state = {
   calendarCursor: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedDate: null,
-  lastFocusedElement: null
+  lastFocusedElement: null,
+  orders: []
 };
 
 function escapeHtml(value) {
@@ -283,8 +287,9 @@ function renderLibrary() {
     const book = event.target.closest(".flip-book");
     if (!book) return;
     const flipped = book.classList.toggle("is-flipped");
+    const title = book.closest(".book-item")?.querySelector(".book-meta h4")?.textContent || "book";
     book.setAttribute("aria-pressed", String(flipped));
-    book.setAttribute("aria-label", flipped ? "Return to the book cover" : `Flip ${book.querySelector(".book-cover h4").textContent} to read the story`);
+    book.setAttribute("aria-label", flipped ? "Return to the book cover" : `Flip ${title} to read the story`);
   });
 }
 
@@ -338,7 +343,7 @@ function configureOrderForm() {
     });
   });
 
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     ["name", "email", "request", "pages"].forEach(clearError);
 
@@ -393,17 +398,31 @@ function configureOrderForm() {
       status: "pending"
     };
 
-    const orders = getOrders();
-    orders.unshift(order);
-    saveOrders(orders);
-
     const message = document.querySelector("#form-message");
+    const submitButton = form.querySelector(".pay-button");
+    submitButton.disabled = true;
+    submitButton.setAttribute("aria-busy", "true");
     message.className = "form-message success";
-    message.textContent = `Request ${order.id} has been recorded. Thank you, ${name}!`;
+    message.textContent = "Saving your request…";
 
-    form.reset();
-    resetChoices();
-    renderAdmin();
+    try {
+      await createOrder(order);
+      message.className = "form-message success";
+      message.textContent = `Request ${order.id} has been received. Thank you, ${name}!`;
+      form.reset();
+      resetChoices();
+
+      if (!document.querySelector("#admin-dashboard").hidden) {
+        await renderAdmin();
+      }
+    } catch (error) {
+      console.error("Unable to create order", error);
+      message.className = "form-message error-state";
+      message.textContent = "We could not save your request. Please try again in a moment.";
+    } finally {
+      submitButton.disabled = false;
+      submitButton.removeAttribute("aria-busy");
+    }
   });
 }
 
@@ -427,23 +446,63 @@ function createOrderId(date) {
   return `SG-${stamp}-${random}`;
 }
 
-function getOrders() {
-  try {
-    const orders = JSON.parse(localStorage.getItem(ORDER_STORAGE_KEY) || "[]");
-    return Array.isArray(orders) ? orders : [];
-  } catch {
-    return [];
-  }
+function requireSupabase() {
+  if (!supabaseClient) throw new Error("Supabase is not configured.");
+  return supabaseClient;
 }
 
-function saveOrders(orders) {
-  localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(orders));
+async function createOrder(order) {
+  const client = requireSupabase();
+  const { error } = await client.from("orders").insert({
+    id: order.id,
+    story_type: order.storyType,
+    page_length: order.pageLength,
+    customer_name: order.name,
+    customer_email: order.email,
+    request: order.request,
+    amount: order.amount,
+    seed_count: order.seedCount
+  });
+
+  if (error) throw error;
 }
 
-async function sha256(value) {
-  const data = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+function mapOrder(row) {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    storyType: row.story_type,
+    pageLength: row.page_length,
+    name: row.customer_name,
+    email: row.customer_email,
+    request: row.request,
+    amount: Number(row.amount),
+    seedCount: Number(row.seed_count),
+    status: row.status,
+    fulfilledAt: row.fulfilled_at
+  };
+}
+
+async function loadOrders() {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("orders")
+    .select("id, created_at, story_type, page_length, customer_name, customer_email, request, amount, seed_count, status, fulfilled_at")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  state.orders = (data || []).map(mapOrder);
+  return state.orders;
+}
+
+async function fulfillOrder(orderId) {
+  const client = requireSupabase();
+  const { error } = await client
+    .from("orders")
+    .update({ status: "fulfilled", fulfilled_at: new Date().toISOString() })
+    .eq("id", orderId);
+
+  if (error) throw error;
 }
 
 function configureAdminPortal() {
@@ -458,24 +517,36 @@ function configureAdminPortal() {
     const email = document.querySelector("#admin-email").value.trim().toLowerCase();
     const password = document.querySelector("#admin-password").value;
     const error = document.querySelector("#admin-login-error");
+    const loginButton = loginForm.querySelector(".admin-login-button");
     error.textContent = "";
+    loginButton.disabled = true;
+    loginButton.textContent = "Signing in…";
 
     try {
-      const passwordHash = await sha256(password);
-      if (email === ADMIN_EMAIL && passwordHash === ADMIN_PASSWORD_HASH) {
-        sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
-        loginForm.reset();
-        showDashboard();
-      } else {
-        error.textContent = "The email or password is incorrect.";
+      const client = requireSupabase();
+      const { data, error: authError } = await client.auth.signInWithPassword({ email, password });
+
+      if (authError) throw authError;
+      if (data.user?.email?.toLowerCase() !== ADMIN_EMAIL) {
+        await client.auth.signOut();
+        error.textContent = "This account does not have admin access.";
+        return;
       }
-    } catch {
-      error.textContent = "Secure sign-in is unavailable in this browser.";
+
+      loginForm.reset();
+      await showDashboard();
+    } catch (authError) {
+      console.error("Admin sign-in failed", authError);
+      error.textContent = "The email or password is incorrect, or the backend is unavailable.";
+    } finally {
+      loginButton.disabled = false;
+      loginButton.textContent = "Open dashboard";
     }
   });
 
-  document.querySelector("#admin-signout").addEventListener("click", () => {
-    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  document.querySelector("#admin-signout").addEventListener("click", async () => {
+    if (supabaseClient) await supabaseClient.auth.signOut();
+    state.orders = [];
     showLogin();
   });
 
@@ -501,16 +572,21 @@ function configureAdminPortal() {
     renderAdmin();
   });
 
-  document.querySelector("#orders-list").addEventListener("click", (event) => {
+  document.querySelector("#orders-list").addEventListener("click", async (event) => {
     const button = event.target.closest(".fulfill-button");
     if (!button || button.disabled) return;
-    const orders = getOrders();
-    const order = orders.find((item) => item.id === button.dataset.orderId);
-    if (!order) return;
-    order.status = "fulfilled";
-    order.fulfilledAt = new Date().toISOString();
-    saveOrders(orders);
-    renderAdmin();
+    button.disabled = true;
+    button.textContent = "Updating…";
+
+    try {
+      await fulfillOrder(button.dataset.orderId);
+      await renderAdmin();
+    } catch (error) {
+      console.error("Unable to fulfill order", error);
+      button.disabled = false;
+      button.textContent = "Try again";
+      document.querySelector("#orders-filter").textContent = "The order could not be updated. Please try again.";
+    }
   });
 
   document.addEventListener("keydown", (event) => {
@@ -518,14 +594,24 @@ function configureAdminPortal() {
   });
 }
 
-function openAdmin() {
+async function openAdmin() {
   state.lastFocusedElement = document.activeElement;
   document.querySelector("#admin-portal").hidden = false;
-  if (sessionStorage.getItem(ADMIN_SESSION_KEY) === "true") {
-    showDashboard();
-  } else {
-    showLogin();
+
+  try {
+    const { data } = supabaseClient
+      ? await supabaseClient.auth.getSession()
+      : { data: { session: null } };
+    const authorized = data.session?.user?.email?.toLowerCase() === ADMIN_EMAIL;
+    if (authorized) {
+      await showDashboard();
+      return;
+    }
+  } catch (error) {
+    console.error("Unable to restore admin session", error);
   }
+
+  showLogin();
 }
 
 function closeAdmin() {
@@ -539,10 +625,10 @@ function showLogin() {
   requestAnimationFrame(() => document.querySelector("#admin-email").focus());
 }
 
-function showDashboard() {
+async function showDashboard() {
   document.querySelector("#admin-login").hidden = true;
   document.querySelector("#admin-dashboard").hidden = false;
-  renderAdmin();
+  await renderAdmin();
   requestAnimationFrame(() => document.querySelector("#admin-signout").focus());
 }
 
@@ -551,9 +637,26 @@ function localDateKey(isoDate) {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 }
 
-function renderAdmin() {
+async function renderAdmin() {
   if (document.querySelector("#admin-dashboard").hidden) return;
-  const orders = getOrders();
+  const list = document.querySelector("#orders-list");
+  list.innerHTML = '<div class="empty-orders"><span aria-hidden="true">🌱</span><strong>Loading orders…</strong><p>Connecting to the Seed Garden backend.</p></div>';
+
+  let orders;
+  try {
+    orders = await loadOrders();
+  } catch (error) {
+    console.error("Unable to load orders", error);
+    state.orders = [];
+    document.querySelector("#order-count").textContent = "0";
+    document.querySelector("#pending-count").textContent = "0";
+    document.querySelector("#fulfilled-count").textContent = "0";
+    renderCalendar();
+    document.querySelector("#orders-filter").textContent = "Unable to connect to the order database.";
+    list.innerHTML = '<div class="empty-orders"><span aria-hidden="true">⚠️</span><strong>Orders are unavailable</strong><p>Check the Supabase connection and database setup.</p></div>';
+    return;
+  }
+
   document.querySelector("#order-count").textContent = orders.length;
   document.querySelector("#pending-count").textContent = orders.filter((order) => order.status !== "fulfilled").length;
   document.querySelector("#fulfilled-count").textContent = orders.filter((order) => order.status === "fulfilled").length;
@@ -567,7 +670,7 @@ function renderCalendar() {
   const month = state.calendarCursor.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const orderDates = new Set(getOrders().map((order) => localDateKey(order.createdAt)));
+  const orderDates = new Set(state.orders.map((order) => localDateKey(order.createdAt)));
   const today = localDateKey(new Date().toISOString());
 
   document.querySelector("#calendar-title").textContent = state.calendarCursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });

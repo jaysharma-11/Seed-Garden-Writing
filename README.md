@@ -15,7 +15,9 @@ A fixed-screen three-column writing website. Each column scrolls independently w
 - `privacy.html` — Privacy Policy page
 - `delivery-fulfillment-policy.html` — digital delivery and fulfillment policy
 - `styles.css` — full responsive styling
-- `script.js` — book flips, form validation, local order storage, admin login, calendar, and fulfillment workflow
+- `script.js` — book flips, form validation, Supabase order storage, admin login, calendar, and fulfillment workflow
+- `supabase-config.js` — public Supabase project URL and anon key
+- `supabase/migrations/` — database schema, row-level security, and admin policies
 
 ## Run locally
 
@@ -31,7 +33,13 @@ Then visit `http://localhost:8000`.
 
 ## Payment setup
 
-The included checkout is intentionally a front-end demo and **does not collect money**. Orders and the admin session are stored only in the current browser. Before publishing, connect the form to a backend, add server-side authentication, and use a payment provider such as Stripe Checkout, PayPal, Razorpay, or another supported gateway.
+Orders are stored in Supabase and the admin portal uses Supabase Auth. The included checkout still **does not collect money**. Before publishing paid checkout, use a payment provider such as Stripe Checkout, PayPal, Razorpay, or another supported gateway and verify successful payments on a trusted server.
+
+## Supabase setup
+
+The browser connection is configured in `supabase-config.js`. The anon key in that file is intentionally public; never place a service-role key in frontend code.
+
+The initial migration has been applied to the linked project. For future database changes, add a migration under `supabase/migrations/` and deploy it with `supabase db push`. Row-level security allows anonymous order submission while restricting order reads and fulfillment updates to the authorized admin email.
 
 Recommended production flow:
 

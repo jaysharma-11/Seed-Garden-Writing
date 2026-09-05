@@ -181,7 +181,7 @@
             <span>Buy <span id="pay-seeds">2 Seeds</span> for $<span id="pay-amount">14</span></span>
             <span aria-hidden="true">→</span>
           </button>
-          <p class="secure-note">Demo checkout — this request is recorded in your current browser.</p>
+          <p class="secure-note">Your request is securely saved to Seed Garden. Payment processing is not yet enabled.</p>
           <div id="form-message" class="form-message" role="status" aria-live="polite"></div>
         </form>
 
@@ -214,7 +214,7 @@
         <div class="admin-icon" aria-hidden="true">🔐</div>
         <span class="eyebrow">Private access</span>
         <h2 id="admin-title">Admin Portal</h2>
-        <p>Sign in to review and manage incoming orders.</p>
+        <p>Sign in securely to review and manage incoming orders.</p>
         <form id="admin-login-form" novalidate>
           <label for="admin-email">Email</label>
           <input id="admin-email" type="email" autocomplete="username" required />
@@ -262,6 +262,8 @@
     </section>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
